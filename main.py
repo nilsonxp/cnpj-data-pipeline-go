@@ -76,10 +76,14 @@ def main():
         return
 
     if not config.database_url:
-        logger.error("DATABASE_URL not set")
+        logger.error("DATABASE_URL ou DB_HOST + DB_NAME não configurados no .env")
         sys.exit(1)
 
-    db = Database(config.database_url)
+    if not config.db_schema:
+        logger.error("DB_SCHEMA não definido no .env")
+        sys.exit(1)
+
+    db = Database(config.database_url, schema=config.db_schema)
 
     try:
         # Select directory

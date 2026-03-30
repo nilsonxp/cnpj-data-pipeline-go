@@ -12,9 +12,17 @@ Baixa e processa dados de empresas brasileiras da Receita Federal para PostgreSQ
 
 ## Requisitos
 
-- [uv](https://docs.astral.sh/uv/) - `brew install uv`
-- [just](https://github.com/casey/just) - `brew install just`
-- Docker
+### macOS
+
+- [uv](https://docs.astral.sh/uv/) — `brew install uv` (ou `curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- [just](https://github.com/casey/just) — `brew install just`
+- Docker Desktop (inclui Docker Compose), para `just up` com PostgreSQL local
+
+### Linux
+
+- [uv](https://docs.astral.sh/uv/) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- [just](https://github.com/casey/just) — `sudo apt install -y just` (Debian/Ubuntu)
+- Docker Engine e **Docker Compose**, para `just up` com PostgreSQL local
 
 ## Início Rápido
 
@@ -50,8 +58,13 @@ just run --month 2024-11 --force  # Forçar reprocessamento
 
 ## Configuração
 
+Copie `.env.example` para `.env` e ajuste. Você pode usar `DATABASE_URL` **ou** `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` e `DB_SCHEMA` (obrigatório para o schema das tabelas).
+
+Exemplo mínimo com URL única (PostgreSQL local via Docker na porta 5435):
+
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5435/cnpj
+DB_SCHEMA=cnpj
 BATCH_SIZE=500000
 TEMP_DIR=./temp
 DOWNLOAD_WORKERS=4

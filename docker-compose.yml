@@ -14,6 +14,7 @@ services:
     environment:
       # Override DATABASE_URL for container networking
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/cnpj
+      DB_SCHEMA: cnpj
     depends_on:
       postgres:
         condition: service_healthy

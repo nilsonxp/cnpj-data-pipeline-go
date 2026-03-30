@@ -28,6 +28,7 @@ def config(tmp_path):
     """Create a test config with temp directory."""
     return Config(
         database_url="postgresql://test",
+        db_schema="cnpj",
         temp_dir=str(tmp_path),
         retry_attempts=3,
         retry_delay=0,  # No delay in tests
@@ -296,6 +297,7 @@ class TestCleanup:
         """Test that cleanup is skipped when keep_files is True."""
         config = Config(
             database_url="postgresql://test",
+            db_schema="cnpj",
             temp_dir=str(tmp_path),
             keep_files=True,
         )
@@ -315,6 +317,7 @@ class TestCachedDownload:
         """Test that existing valid ZIP is reused instead of downloading."""
         config = Config(
             database_url="postgresql://test",
+            db_schema="cnpj",
             temp_dir=str(tmp_path),
             keep_files=True,
         )

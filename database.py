@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 import polars as pl
 import psycopg2
+from psycopg2 import sql
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +16,9 @@ logger = logging.getLogger(__name__)
 class Database:
     """PostgreSQL database handler with temp table upsert."""
 
-    def __init__(self, database_url: str):
+    def __init__(self, database_url: str, schema: str):
         self.database_url = database_url
+        self.schema = schema
         self._pk_cache: dict = {}
         self.conn = None
 
@@ -41,6 +43,10 @@ class Database:
             try:
                 self.conn = psycopg2.connect(**params)
                 self.conn.autocommit = False
+                with self.conn.cursor() as cur:
+                    cur.execute(
+                        sql.SQL("SET search_path TO {}, public").format(sql.Identifier(self.schema))
+                    )
                 return
             except psycopg2.OperationalError:
                 if attempt == 3:
@@ -131,8 +137,9 @@ class Database:
 
     def _get_primary_keys(self, cur, table_name: str) -> List[str]:
         """Get primary key columns for a table with caching."""
-        if table_name in self._pk_cache:
-            return self._pk_cache[table_name]
+        cache_key = f"{self.schema}.{table_name}"
+        if cache_key in self._pk_cache:
+            return self._pk_cache[cache_key]
 
         cur.execute(
             """
@@ -146,7 +153,7 @@ class Database:
         )
 
         primary_keys = [row[0] for row in cur.fetchall()]
-        self._pk_cache[table_name] = primary_keys
+        self._pk_cache[cache_key] = primary_keys
         return primary_keys
 
     def _upsert_from_temp(self, cur, temp_table: str, target_table: str, columns: List[str], primary_keys: List[str]):
