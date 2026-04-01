@@ -99,6 +99,7 @@ def main():
         # Handle --force mode
         if args.force:
             print(f"Force mode: clearing processed files for {directory}")
+            db.abandon_open_cargas(directory)
             db.clear_processed_files(directory)
 
         all_files = downloader.get_directory_files(directory)
@@ -109,7 +110,9 @@ def main():
             print("All files already processed!")
             return
 
-        print(f"Processing {len(pending_files)} files from {directory}")
+        carga_id = db.ensure_carga(directory)
+
+        print(f"Processing {len(pending_files)} files from {directory} (carga id={carga_id})")
 
         # Sort files by processing order
         pending_files.sort(key=get_file_priority)
@@ -122,11 +125,11 @@ def main():
                 try:
                     rows = 0
                     for batch, table_name, columns in process_file(csv_path, config.batch_size):
-                        db.bulk_upsert(batch, table_name, columns)
+                        db.bulk_upsert(batch, table_name, columns, carga_id)
                         rows += len(batch)
                         pbar.set_postfix_str(f"{csv_path.name[:20]} {rows:,} rows")
 
-                    db.mark_processed(directory, zip_filename)
+                    db.mark_processed(directory, zip_filename, carga_id)
 
                 except Exception as e:
                     logger.error(f"Error: {csv_path.name}: {e}")
@@ -134,6 +137,9 @@ def main():
                 finally:
                     if csv_path.exists() and not config.keep_files:
                         csv_path.unlink()
+
+        if not [f for f in all_files if f not in db.get_processed_files(directory)]:
+            db.finalize_carga(carga_id)
 
         print("Done!")
 

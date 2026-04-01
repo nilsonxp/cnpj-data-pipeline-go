@@ -4,12 +4,26 @@
 CREATE SCHEMA IF NOT EXISTS cnpj;
 
 -- ============================================================================
+-- Carga (lote): origem das linhas carregadas a partir de um diretório YYYY-MM
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS cnpj.cargas (
+    id BIGSERIAL PRIMARY KEY,
+    directory VARCHAR(50) NOT NULL,
+    iniciado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+    concluida_em TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cargas_directory ON cnpj.cargas (directory);
+
+-- ============================================================================
 -- Reference Tables
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS cnpj.cnaes (
     codigo VARCHAR(7) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -17,6 +31,7 @@ CREATE TABLE IF NOT EXISTS cnpj.cnaes (
 CREATE TABLE IF NOT EXISTS cnpj.motivos (
     codigo VARCHAR(2) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -24,6 +39,7 @@ CREATE TABLE IF NOT EXISTS cnpj.motivos (
 CREATE TABLE IF NOT EXISTS cnpj.municipios (
     codigo VARCHAR(7) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -31,6 +47,7 @@ CREATE TABLE IF NOT EXISTS cnpj.municipios (
 CREATE TABLE IF NOT EXISTS cnpj.naturezas_juridicas (
     codigo VARCHAR(4) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -38,6 +55,7 @@ CREATE TABLE IF NOT EXISTS cnpj.naturezas_juridicas (
 CREATE TABLE IF NOT EXISTS cnpj.paises (
     codigo VARCHAR(3) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -45,6 +63,7 @@ CREATE TABLE IF NOT EXISTS cnpj.paises (
 CREATE TABLE IF NOT EXISTS cnpj.qualificacoes_socios (
     codigo VARCHAR(2) PRIMARY KEY,
     descricao TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -61,6 +80,7 @@ CREATE TABLE IF NOT EXISTS cnpj.empresas (
     capital_social DOUBLE PRECISION,
     porte VARCHAR(2),
     ente_federativo_responsavel TEXT,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
@@ -96,6 +116,7 @@ CREATE TABLE IF NOT EXISTS cnpj.estabelecimentos (
     correio_eletronico TEXT,
     situacao_especial TEXT,
     data_situacao_especial DATE,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL,
     PRIMARY KEY (cnpj_basico, cnpj_ordem, cnpj_dv)
@@ -113,6 +134,7 @@ CREATE TABLE IF NOT EXISTS cnpj.socios (
     nome_do_representante TEXT,
     qualificacao_do_representante_legal VARCHAR(2),
     faixa_etaria VARCHAR(1),
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL,
     PRIMARY KEY (cnpj_basico, identificador_de_socio, cnpj_cpf_do_socio)
@@ -126,27 +148,38 @@ CREATE TABLE IF NOT EXISTS cnpj.dados_simples (
     opcao_pelo_mei VARCHAR(1),
     data_opcao_pelo_mei DATE,
     data_exclusao_do_mei DATE,
+    carga_id BIGINT REFERENCES cnpj.cargas (id),
     data_criacao TIMESTAMP DEFAULT NOW() NOT NULL,
     data_atualizacao TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
 -- ============================================================================
--- Tracking Table
+-- Tracking (arquivos ZIP) por carga
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS cnpj.processed_files (
+    id BIGSERIAL PRIMARY KEY,
+    carga_id BIGINT NOT NULL REFERENCES cnpj.cargas (id) ON DELETE CASCADE,
     directory VARCHAR(50) NOT NULL,
     filename VARCHAR(255) NOT NULL,
     processed_at TIMESTAMP DEFAULT NOW(),
-    PRIMARY KEY (directory, filename)
+    UNIQUE (carga_id, filename)
 );
+
+CREATE INDEX IF NOT EXISTS idx_processed_files_directory ON cnpj.processed_files (directory);
 
 -- ============================================================================
 -- Indexes
 -- ============================================================================
 
-CREATE INDEX IF NOT EXISTS idx_estabelecimentos_uf ON cnpj.estabelecimentos(uf);
-CREATE INDEX IF NOT EXISTS idx_estabelecimentos_municipio ON cnpj.estabelecimentos(municipio);
-CREATE INDEX IF NOT EXISTS idx_estabelecimentos_situacao ON cnpj.estabelecimentos(situacao_cadastral);
-CREATE INDEX IF NOT EXISTS idx_estabelecimentos_cnae ON cnpj.estabelecimentos(cnae_fiscal_principal);
-CREATE INDEX IF NOT EXISTS idx_socios_cnpj_basico ON cnpj.socios(cnpj_basico);
+CREATE INDEX IF NOT EXISTS idx_estabelecimentos_uf ON cnpj.estabelecimentos (uf);
+CREATE INDEX IF NOT EXISTS idx_estabelecimentos_municipio ON cnpj.estabelecimentos (municipio);
+CREATE INDEX IF NOT EXISTS idx_estabelecimentos_situacao ON cnpj.estabelecimentos (situacao_cadastral);
+CREATE INDEX IF NOT EXISTS idx_estabelecimentos_cnae ON cnpj.estabelecimentos (cnae_fiscal_principal);
+CREATE INDEX IF NOT EXISTS idx_socios_cnpj_basico ON cnpj.socios (cnpj_basico);
+
+CREATE INDEX IF NOT EXISTS idx_cnaes_carga_id ON cnpj.cnaes (carga_id);
+CREATE INDEX IF NOT EXISTS idx_empresas_carga_id ON cnpj.empresas (carga_id);
+CREATE INDEX IF NOT EXISTS idx_estabelecimentos_carga_id ON cnpj.estabelecimentos (carga_id);
+CREATE INDEX IF NOT EXISTS idx_socios_carga_id ON cnpj.socios (carga_id);
+CREATE INDEX IF NOT EXISTS idx_dados_simples_carga_id ON cnpj.dados_simples (carga_id);

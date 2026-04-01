@@ -79,6 +79,8 @@ KEEP_DOWNLOADED_FILES=false
 
 > Documentação completa: [docs/data-schema.md](docs/data-schema.md)
 
+Cada execução de carga cria (ou retoma) um registro em **`cnpj.cargas`** (`directory` = pasta `YYYY-MM`). As tabelas de domínio guardam **`carga_id`** apontando para esse lote; **`cnpj.processed_files`** liga cada ZIP processado à mesma carga.
+
 ```
 EMPRESAS (1) ─── (N) ESTABELECIMENTOS
          ├─── (N) SOCIOS

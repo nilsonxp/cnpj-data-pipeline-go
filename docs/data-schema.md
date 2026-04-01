@@ -24,6 +24,12 @@ erDiagram
 
 > **Nota:** Dados históricos podem ter inconsistências legítimas (códigos de município antigos, CNAEs desativados, etc.). Evite forçar integridade referencial completa.
 
+## Linhagem no banco
+
+- **`cnpj.cargas`**: um registro por “lote” de carga — campo **`directory`** (ex.: `2024-11`). **`concluida_em`** fica preenchido quando todos os ZIPs daquele mês foram processados com sucesso; permanece nulo se houve retomada parcial.
+- **`carga_id`**: coluna (FK para `cargas.id`) em todas as tabelas de domínio do pipeline; indica **qual carga** atualizou cada linha por último (via upsert).
+- **`cnpj.processed_files`**: cada arquivo ZIP concluído fica ligado à **`carga_id`** correspondente, com cópia de **`directory`** para consultas rápidas.
+
 ## Formato dos Arquivos
 
 | Propriedade | Valor |

@@ -12,6 +12,21 @@ from psycopg2 import sql
 
 logger = logging.getLogger(__name__)
 
+TABLES_WITH_CARGA_ID = frozenset(
+    {
+        "cnaes",
+        "motivos",
+        "municipios",
+        "naturezas_juridicas",
+        "paises",
+        "qualificacoes_socios",
+        "empresas",
+        "estabelecimentos",
+        "socios",
+        "dados_simples",
+    }
+)
+
 
 class Database:
     """PostgreSQL database handler with temp table upsert."""
@@ -59,6 +74,58 @@ class Database:
             self.conn.close()
             self.conn = None
 
+    def abandon_open_cargas(self, directory: str):
+        """Encerra cargas abertas do diretório (ex.: antes de force)."""
+        self.connect()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE cargas SET concluida_em = NOW()
+                WHERE directory = %s AND concluida_em IS NULL
+                """,
+                (directory,),
+            )
+        self.conn.commit()
+
+    def ensure_carga(self, directory: str) -> int:
+        """Reutiliza carga aberta (retomada) ou cria nova para o diretório."""
+        self.connect()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM cargas
+                WHERE directory = %s AND concluida_em IS NULL
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (directory,),
+            )
+            row = cur.fetchone()
+            if row:
+                cid = row[0]
+                self.conn.commit()
+                return cid
+            cur.execute(
+                "INSERT INTO cargas (directory) VALUES (%s) RETURNING id",
+                (directory,),
+            )
+            cid = cur.fetchone()[0]
+        self.conn.commit()
+        return cid
+
+    def finalize_carga(self, carga_id: int):
+        """Marca carga como concluída quando todos os arquivos do mês foram processados."""
+        self.connect()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE cargas SET concluida_em = NOW()
+                WHERE id = %s AND concluida_em IS NULL
+                """,
+                (carga_id,),
+            )
+        self.conn.commit()
+
     def get_processed_files(self, directory: str) -> Set[str]:
         """Get all processed filenames for a directory."""
         self.connect()
@@ -69,18 +136,22 @@ class Database:
                     (directory,),
                 )
                 return {row[0] for row in cur.fetchall()}
-        except Exception:
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"Error reading processed_files for {directory}: {e}")
             return set()
 
-    def mark_processed(self, directory: str, filename: str):
+    def mark_processed(self, directory: str, filename: str, carga_id: int):
         """Mark a file as processed."""
         self.connect()
         with self.conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO processed_files (directory, filename)
-                   VALUES (%s, %s)
-                   ON CONFLICT (directory, filename) DO NOTHING""",
-                (directory, filename),
+                """
+                INSERT INTO processed_files (carga_id, directory, filename)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (carga_id, filename) DO NOTHING
+                """,
+                (carga_id, directory, filename),
             )
             self.conn.commit()
 
@@ -94,10 +165,14 @@ class Database:
             )
             self.conn.commit()
 
-    def bulk_upsert(self, df: pl.DataFrame, table_name: str, columns: List[str]):
+    def bulk_upsert(self, df: pl.DataFrame, table_name: str, columns: List[str], carga_id: int):
         """Bulk upsert using temp table + COPY."""
         if df.is_empty():
             return
+
+        if table_name in TABLES_WITH_CARGA_ID:
+            df = df.with_columns(pl.lit(carga_id).alias("carga_id"))
+            columns = list(columns) + ["carga_id"]
 
         self.connect()
         temp_table = f"temp_{table_name}_{id(df)}"
@@ -166,9 +241,9 @@ class Database:
         if update_clause:
             update_clause += ", data_atualizacao = CURRENT_TIMESTAMP"
 
-        sql = f"""
+        upsert_sql = f"""
             INSERT INTO {target_table} ({columns_str})
             SELECT DISTINCT ON ({pk_str}) {columns_str} FROM {temp_table} ORDER BY {pk_str}
             ON CONFLICT ({pk_str}) {"DO UPDATE SET " + update_clause if update_clause else "DO NOTHING"}
         """
-        cur.execute(sql)
+        cur.execute(upsert_sql)
